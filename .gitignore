@@ -1,0 +1,6 @@
+Output/*.xlsx
+Output/*.csv
+input/*.xlsx
+input/*.csv
+Holding
+config/*
