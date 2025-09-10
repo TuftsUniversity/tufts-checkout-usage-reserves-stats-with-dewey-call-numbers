@@ -9,7 +9,7 @@ Author: Henry Steele, Library Technology Services, Tufts University
     - 	/shared/Tufts University/Reports/Fulfillment/Circulation Statistics/Semester Reserve Stats by Course
     -	/shared/Tufts University/Reports/Fulfillment/Circulation Statistics/Academic Department for Reserves and MMS ID
     -	/shared/Tufts University/Reports/Fulfillment/Circulation Statistics/	SUSHI Usage Stats by Date for Ebooks - Fiscal Years During Which We Had Canvas Reading List Tool
-- the report generator SQL also list the field reqiurements
+- the report generator SQL also lists the field reqiurements
     - "Semester Reserve Stats by Course"
         `SELECT 
         "Item Location at time of loan"."Library Name" saw_0,
@@ -69,6 +69,16 @@ Author: Henry Steele, Library Technology Services, Tufts University
     - Then the ISBNs for each of these is "exploded" (separated into separate rows), and the course codes and course information is rolled up by fiscal year, so that then this can be compared with publisher supplied electronic usage stats
     - Note that the SUSH stats only contain one ISBN, but our records have many, so the exploded data allows any of these to be tried for a match
     - finally each row in this resultant data sheet is fed into an OCLC API call to get call number 
+	
+## Install and Run
+
+	- install Python
+		- https://www.python.org/downloads/
+		- the installation and configuration of Python such that Python is available as a system command in your environement variables is outside the scope of this document
+	- install requirements
+		- `python3 -m pip install -r requirements.txt`
+	- run program and produce outputs.  This may take a few minutes
+		- `python3 getOCLCDewey.py`
 
 ## Data Model
 

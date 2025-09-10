@@ -8,7 +8,7 @@ sys.path.append('config/')
 import secrets_local
 #from tkinter.filedialog import askopenfilename
 from tkinter import filedialog
-import glob
+
 import pandas as pd
 import json
 import re
@@ -17,7 +17,7 @@ import urllib
 import xml.etree.ElementTree as ET
 import time
 import os
-import socket
+
 
 barcode_array = []
 
@@ -809,6 +809,12 @@ def main():
     #     }
     # ]
 
+    output_dir = os.path.join(os.getcwd(), "Output")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    input_dir = os.path.join(os.getcwd(), "input")
+    if not os.path.exists(input_dir):
+        os.makedirs(input_dir)
     semester_counts_file_path = filedialog.askopenfilename(title="Upload Excel file of semester course counts")
 
     academic_deparment_filepath = filedialog.askopenfilename(title="Upload Excel file of academic departments")
