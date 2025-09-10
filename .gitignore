@@ -4,3 +4,4 @@ input/*.xlsx
 input/*.csv
 Holding
 config/*
+findBLCHoldings_v2.py
