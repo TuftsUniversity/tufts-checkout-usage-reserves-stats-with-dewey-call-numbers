@@ -70,133 +70,164 @@ def search_oclc(oclc):
 
     
 
+# ...existing code...
 def search_oclc(oclc):
-    print("OCLC Number to search: ||" + str(oclc) + "||")
+    """
+    Query OCLC for a single OCLC number and return a dict:
+    { 'title': str, 'dewey': str, 'pub_date': str, 'oclc_number': str }
+    Uses global access_token (must be set before calling).
+    """
+    global access_token
+
+    oclc_str = str(oclc).strip()
+    if oclc_str == "" or oclc_str.lower().startswith("nan"):
+        return {"title": "", "dewey": "", "pub_date": "", "oclc_number": oclc_str}
 
     url_prefix = "https://americas.discovery.api.oclc.org/worldcat/search/v2/bibs?q=no:"
+    url = f"{url_prefix}{urllib.parse.quote(oclc_str)}&rows=1"
 
-    access_token = get_oclc_token(secrets_local.client_id, secrets_local.client_secret)
     headers = {
         "accept": "application/json",
         "Authorization": f"Bearer {access_token}"
     }
 
     max_retries = 5
-    backoff = 5  # seconds, will increase exponentially
-
-    for attempt in range(max_retries):
+    backoff = 5
+    for attempt in range(1, max_retries + 1):
         try:
-            resp = requests.get(
-                url_prefix + str(oclc) + "&rows=1",
-                headers=headers,
-                timeout=5
-            )
-
+            resp = requests.get(url, headers=headers, timeout=15)
             if resp.status_code == 200:
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except Exception:
+                    return {"title": "", "dewey": "", "pub_date": "", "oclc_number": oclc_str}
 
-                titleAuthor = (
-                    data['bibRecords'][0]['title']['mainTitles'][0]['text']
-                    if 'bibRecords' in data and len(data['bibRecords']) > 0
-                    and 'title' in data['bibRecords'][0]
-                    and 'mainTitles' in data['bibRecords'][0]['title']
-                    and len(data['bibRecords'][0]['title']['mainTitles']) > 0
-                    and 'text' in data['bibRecords'][0]['title']['mainTitles'][0]
-                    else 'No Title Found'
-                )
+                # Safely extract common fields (fall back to empty strings)
+                title = ""
+                dewey = ""
+                pub_date = ""
 
-                dewey = (
-                    data['bibRecords'][0]['classification']['dewey']
-                    if 'bibRecords' in data and len(data['bibRecords']) > 0
-                    and 'classification' in data['bibRecords'][0]
-                    and 'dewey' in data['bibRecords'][0]['classification']
-                    else 'No Dewey Found'
-                )
+                try:
+                    br = data.get("bibRecords") or []
+                    if isinstance(br, list) and len(br) > 0:
+                        rec = br[0]
+                        # title
+                        title = (
+                            rec.get("title", {})
+                               .get("mainTitles", [{}])[0]
+                               .get("text", "") if rec.get("title") else ""
+                        ) or title
+                        # dewey
+                        if rec.get("classification"):
+                            cls = rec["classification"]
+                            if isinstance(cls, dict) and "dewey" in cls:
+                                dewey = cls.get("dewey") or dewey
+                            elif isinstance(cls, list) and len(cls) > 0 and isinstance(cls[0], dict):
+                                dewey = cls[0].get("dewey") or dewey
+                        # publication date
+                        if rec.get("date") and isinstance(rec["date"], dict):
+                            pub_date = rec["date"].get("publicationDate") or pub_date
+                except Exception:
+                    pass
 
-                publicationDate = (
-                    data['bibRecords'][0]['date']['publicationDate']
-                    if 'bibRecords' in data and len(data['bibRecords']) > 0
-                    and 'date' in data['bibRecords'][0]
-                    and 'publicationDate' in data['bibRecords'][0]['date']
-                    else 'No Publication Date Found'
-                )
+                return {
+                    "title": "" if title is None else str(title),
+                    "dewey": "" if dewey is None else str(dewey),
+                    "pub_date": "" if pub_date is None else str(pub_date),
+                    "oclc_number": oclc_str
+                }
 
-                # ✅ Assign into the dicts
-                title_dict[oclc] = titleAuthor
-                dewey_dict[oclc] = dewey
-                date_dict[oclc] = publicationDate
-
-            else:
-                print(f"Attempt {attempt+1}: HTTP {resp.status_code} - {resp.text}")
-                 # exponential backoff before next retry
+            elif resp.status_code in (429, 503):
+                # rate limited / service unavailable -> backoff and retry
                 time.sleep(backoff)
                 backoff *= 2
-
+                continue
+            else:
+                # other HTTP errors -> return empties (no retry)
+                return {"title": "", "dewey": "", "pub_date": "", "oclc_number": oclc_str}
 
         except requests.exceptions.Timeout:
-            print(f"Attempt {attempt+1}: timeout for OCLC {oclc}")
-             # exponential backoff before next retry
             time.sleep(backoff)
             backoff *= 2
+            continue
+        except Exception:
+            # unexpected error; return empties
+            return {"title": "", "dewey": "", "pub_date": "", "oclc_number": oclc_str}
+
+    # exhausted retries
+    return {"title": "", "dewey": "", "pub_date": "", "oclc_number": oclc_str}
 
 
-        except Exception as e:
-            print(f"Attempt {attempt+1}: error {e}")
-             # exponential backoff before next retry
-            time.sleep(backoff)
-            backoff *= 2
+def process_spreadsheet(oclc_list, output_csv_path=None, chunk_sleep=0.2):
+    """
+    Iterate unique OCLC numbers, query OCLC, and append matching rows from grouped_oclc_df
+    to the CSV incrementally. Creates header once.
+    """
+    global grouped_oclc_df, access_token
 
+    if output_csv_path is None:
+        from datetime import datetime
+        timestamp_filename = datetime.now().strftime("%Y%m%d%H%M%S")
+        output_csv_path = f"Output/Library Statistics with Merged OCLC Data {timestamp_filename}.csv"
+    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
 
-       
-    else:
-        title_dict[oclc] = "No OCLC Results - not found"
-        dewey_dict[oclc] = "No OCLC Results - not found"
-        date_dict[oclc] = "No OCLC Results - not found"
-        
-
-  
-def process_spreadsheet(oclc_list):
-
-   
-
-
-    global grouped_oclc_df, title_dict, dewey_dict, date_dict, access_token
-
-
+    # ensure token present
     access_token = get_oclc_token(secrets_local.client_id, secrets_local.client_secret)
 
+    # normalize key used for matching
+    key_col = "OCLC Control Number (035a)"
+    grouped_oclc_df["_OCLC_norm_"] = grouped_oclc_df[key_col].astype(str).str.strip()
 
-    results = []
+    # remove existing file to start fresh
+    if os.path.exists(output_csv_path):
+        os.remove(output_csv_path)
 
-    x = 0
-    for oclc in oclc_list:
-        # if x == 25:
-        #     break
-        if x != 0 and x % 100 == 0:
-            time.sleep(30)
-        x += 1
+    header_written = False
+    total = len(oclc_list)
+    for idx, raw_oclc in enumerate(oclc_list, start=1):
+        oclc_str = str(raw_oclc).strip()
+        if oclc_str == "" or oclc_str.lower().startswith("nan"):
+            # still append any rows that have blank OCLC if present
+            matched = grouped_oclc_df[grouped_oclc_df["_OCLC_norm_"] == oclc_str]
+            if not matched.empty:
+                matched = matched.copy()
+                matched["OCLC TitleAuthor"] = ""
+                matched["OCLC Dewey"] = ""
+                matched["OCLC Publication Date"] = ""
+                matched["OCLC Number"] = oclc_str
+                matched.to_csv(output_csv_path, mode="a", index=False, header=not header_written)
+                header_written = True
+                print(f"[{idx}/{total}] Appended {len(matched)} row(s) for blank OCLC")
+            continue
 
-        search_oclc(oclc)
+        # get OCLC info
+        info = search_oclc(oclc_str)
 
-    
+        # find matching rows in grouped_oclc_df
+        matched = grouped_oclc_df[grouped_oclc_df["_OCLC_norm_"] == oclc_str]
+        if matched.empty:
+            print(f"[{idx}/{total}] OCLC {oclc_str}: no matching rows")
+        else:
+            matched = matched.copy()
+            matched["OCLC TitleAuthor"] = info.get("title", "")
+            matched["OCLC Dewey"] = info.get("dewey", "")
+            matched["OCLC Publication Date"] = info.get("pub_date", "")
+            matched["OCLC Number"] = info.get("oclc_number", oclc_str)
 
-    
+            # append to CSV; write header only once
+            matched.to_csv(output_csv_path, mode="a", index=False, header=not header_written)
+            header_written = True
+            print(f"[{idx}/{total}] Appended {len(matched)} row(s) for OCLC {oclc_str}")
 
+        # throttle
+        time.sleep(chunk_sleep)
 
+    # cleanup
+    if "_OCLC_norm_" in grouped_oclc_df.columns:
+        grouped_oclc_df.drop(columns=["_OCLC_norm_"], inplace=True)
 
-    
-
-    grouped_oclc_df['OCLC TitleAuthor'] = grouped_oclc_df['OCLC Control Number (035a)'].apply(lambda x: title_dict.get(x))
-    grouped_oclc_df['OCLC Dewey'] = grouped_oclc_df['OCLC Control Number (035a)'].apply(lambda x: dewey_dict.get(x))
-    grouped_oclc_df['OCLC Publication Date'] = grouped_oclc_df['OCLC Control Number (035a)'].apply(lambda x: date_dict.get(x))  
-    grouped_oclc_df['OCLC Number'] = grouped_oclc_df['OCLC Control Number (035a)'].apply(lambda x: oclc_number_dict.get(x))         
-    
-    pd.set_option('display.max_columns', None)
-
-
-
-
-
+    print(f"Incremental output complete: {output_csv_path}")
+# ...existing code...
 def main():
 
     import time
@@ -349,69 +380,29 @@ def main():
     print(f"Number of unique MMS IDs: {number_of_mms_ids}")
     print(f"Number of unique OCLC Control Numbers: {number_of_oclcs}")  
     
+    # prepare output filename with timestamp and ensure output folder exists
+    from datetime import datetime
+    now = datetime.now()
+    timestamp_filename = now.strftime("%Y%m%d%H%M%S")
+    output_filename = f"Output/Library Statistics with Merged OCLC Data {timestamp_filename}.csv"
+    os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+
     if oclc_bool:
         print("You indicated you already have OCLC data. Merging it now.")
         oclc_df = pd.read_csv(oclc_data_file, skiprows=0, header=0, dtype={'OCLC Control Number (035a)': "str"})
-        print("Length of OCLC df")
-        print(len(oclc_df))
-
         oclc_df = oclc_df[['OCLC Control Number (035a)', 'OCLC TitleAuthor', 'OCLC Dewey', 'OCLC Publication Date', 'Course Code']]
-        oclc_df['OCLC Control Number (035a)'] = oclc_df['OCLC Control Number (035a)'].astype(str).str.strip()   
-
+        oclc_df['OCLC Control Number (035a)'] = oclc_df['OCLC Control Number (035a)'].astype(str).str.strip()
         grouped_oclc_df = pd.merge(grouped_oclc_df, oclc_df, how='left', left_on=['OCLC Control Number (035a)', 'Course Code'], right_on=['OCLC Control Number (035a)', 'Course Code'])
-        
-        print("After merging with existing OCLC data")
-        print(grouped_oclc_df)
-
-
-        
+        # write merged dataframe once (has OCLC data from supplied file)
+        grouped_oclc_df.to_csv(output_filename, index=False)
+        print(f"Wrote merged dataframe to: {output_filename}")
     else:
-        process_spreadsheet(unique_oclcs)
-        #grouped_oclc_df.to_csv("Output/Library Statistics with OCLC Data.csv", index=False)           
+        # incremental processing — pass the timestamped filename so progress is saved there
+        process_spreadsheet(unique_oclcs, output_csv_path=output_filename)
+        print(f"Incremental output written to: {output_filename}")
 
+    # ...existing code...
 
-    # grouped_oclc_df = grouped_oclc_df.groupby(
-    # [
-    #     "Library Name", 
-    #     "Location Name", 
-    #     "Item Policy", 
-    #     "Loan Fiscal Year", 
-    #     "ISBN (Normalized)",
-    #     "MMS Id", 
-    #     "Loans (Not In House)", 
-    #     "Course Fiscal Year", 
-    #     "Course Code", 
-    #     "Course Name", 
-    #     "Associated Course Code", 
-    #     "Academic Department Description", 
-    #     "Platform", 
-    #     "Normalized Title", 
-    #     "Display Title", 
-    #     "Normalized ISBN", 
-    #     "Title Identifier Count", 
-    #     "Usage Measures Total", 
-    #     "Section Type", 
-    #     "Usage Date Fiscal Year",
-    #     "OCLC TitleAuthor",
-    #     "OCLC Dewey",
-    #     "OCLC Publication Date",
-
-    # ],
-    # as_index=False, 
-    # dropna=False
-    # ).agg({
-    #     "OCLC Control Number (035a)": lambda x: '; '.join(sorted(set(x.dropna().astype(str))))
-    # })
-
-    from datetime import datetime
-        # Get the current datetime object
-    now = datetime.now()
-
-    # Format the datetime object into a filename-safe string
-    timestamp_filename = now.strftime("%Y%m%d%H%M%S") 
-    grouped_oclc_df.to_csv(f"Output/Library Statistics with Merged OCLC Data {timestamp_filename}.csv", index=False)
-     
-    
 
 
 
