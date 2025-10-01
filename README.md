@@ -79,6 +79,12 @@ Author: Henry Steele, Library Technology Services, Tufts University
 		- `python3 -m pip install -r requirements.txt`
 	- run program and produce outputs.  This may take a few minutes
 		- `python3 getOCLCDewey.py`
+		- for the initial process of merging the Alma data, the script runtime is around 2 minutes on a machine with 16GB of RAM running on roughly:
+			- 3,000 rows of semester data
+			- 8,000 rows of course data
+			- 132,000 rows of SUSHI data
+		- the part that retrieves Dewey Decimal Numbers from OCLC can take an hour or more on data of this size.
+		- if you have already retreived the OCLC data, and have made modifications to the script and want to process with this data, you can answer "yes" to the prompt
 
 ## Data Model
 
