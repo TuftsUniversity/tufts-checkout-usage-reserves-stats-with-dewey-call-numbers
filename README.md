@@ -88,4 +88,4 @@ Author: Henry Steele, Library Technology Services, Tufts University
 
 ## Data Model
 
-![Data Model](Library Usage, Reserves Subjects, and Classifications Stats Data Moel.drawio.svg)
+![Data Model](Library%20Usage%2C%20Reserves%20Subjects%2C%20and%20Classifications%20Stats%20Data%20Model.drawio.png)
