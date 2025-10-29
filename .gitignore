@@ -1,7 +1,4 @@
-Output/*.xlsx
-Output/*.csv
-input/*.xlsx
-input/*.csv
 Holding
-config/*
-findBLCHoldings_v2.py
+Output/*.csv
+Output/*.xlsx
+input/*.xlsx

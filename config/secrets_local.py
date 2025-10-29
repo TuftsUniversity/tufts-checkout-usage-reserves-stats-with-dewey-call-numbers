@@ -1,0 +1,4 @@
+#wskey = "fuNUMJpC6TCkAlucYIYYNIAdzcLlPLMJs0CcTXRo595aX6zEpY1krYZJo7hbJeA7PEPeezVzMCNzWff3"
+wskey = "4zGjyZQAZXIzXbUiNdT7DnefeoDsifRr"
+client_id = "rJ53F92enJ4zf8ukopccDvYDgSpFvOqgBl04TMQBVjzhFEcRbulR8SZyWLxZut6gfSAuskq1XAeNIs7E"
+client_secret = "4zGjyZQAZXIzXbUiNdT7DnefeoDsifRr"
