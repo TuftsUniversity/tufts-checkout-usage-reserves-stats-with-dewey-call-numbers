@@ -1,4 +1,3 @@
-Holding
-Output/*.csv
-Output/*.xlsx
-input/*.xlsx
+Output/*
+Holding/*
+input/*
